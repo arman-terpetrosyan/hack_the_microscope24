@@ -6,7 +6,11 @@ import h5py
 import matplotlib.patches as patches
 import os
 from sklearn.cluster import KMeans
-
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.cluster import SpectralClustering
 
 
 
@@ -156,6 +160,17 @@ def plt_ground_truth(SBFOdata):
     plt.show()
 
 
+def pca_plot(imstack_grid, cluster_labels):
+    pca = PCA(n_components=2)
+    patch_vectors = imstack_grid.reshape(imstack_grid.shape[0], -1) 
+    cmap = plt.cm.get_cmap('Set1', len(np.unique(cluster_labels)))
+    patch_vectors_2d = pca.fit_transform(patch_vectors)
+    plt.scatter(patch_vectors_2d[:, 0], patch_vectors_2d[:, 1], s=5, c = cluster_labels, cmap = cmap )
+    plt.title("PCA Projection of Patch Vectors")
+    plt.xlabel("Principal Component 1")
+    plt.ylabel("Principal Component 2")
+    plt.show()
+
 
 def k_means_clustering(imstack_grid, n_clusters, com_grid, window_size, step_size):
     patch_vectors = imstack_grid.reshape(imstack_grid.shape[0], -1)
@@ -176,8 +191,74 @@ def k_means_clustering(imstack_grid, n_clusters, com_grid, window_size, step_siz
 
     for cluster in range(n_clusters):
         print(f"cluster {cluster} size: {len(imstack_grid[cluster_labels == cluster])}")
-
+    
+    pca_plot(imstack_grid,cluster_labels )
     plt_clusters(com_grid, window_size, n_clusters, cluster_labels, step_size)
+
+
+def dbscan_clustering(imstack_grid, eps, min_samples, com_grid, window_size, step_size):
+    patch_vectors = imstack_grid.reshape(imstack_grid.shape[0], -1) 
+    scaler = MinMaxScaler()
+    patch_vectors = scaler.fit_transform(patch_vectors)
+
+    dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean')
+    labels = dbscan.fit_predict(patch_vectors)
+
+    unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels[unique_labels != -1])
+
+    if n_clusters == 0:
+        print("No clusters found. All points may be noise.")
+        return
+
+    fig, axes = plt.subplots(n_clusters, 3, figsize=(9, n_clusters * 3))
+
+
+    if n_clusters == 1:  # Handle single-cluster case for plotting
+        axes = [axes]
+    
+    for cluster_idx, cluster in enumerate(unique_labels):
+        if cluster == -1:  # Skip noise
+            continue
+        
+        cluster_patches = imstack_grid[labels == cluster][:3]  # First 3 patches in this cluster
+        for i, patch in enumerate(cluster_patches):
+            axes[cluster_idx][i].imshow(patch, cmap='gray')
+            axes[cluster_idx][i].axis('off')
+            axes[cluster_idx][i].set_title(f"Cluster {cluster}")
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Print cluster sizes
+    for cluster in unique_labels:
+        if cluster == -1:
+            print(f"Noise points: {np.sum(labels == -1)}")
+        else:
+            print(f"Cluster {cluster} size: {np.sum(labels == cluster)}")
+    
+    # Visualize clusters on the grid
+    pca_plot(imstack_grid,labels )
+    plt_clusters(com_grid, window_size, n_clusters, labels, step_size)
+
+    
+def agglo_clustering(imstack_grid, n_clusters, com_grid, window_size, step_size):
+    patch_vectors = imstack_grid.reshape(imstack_grid.shape[0], -1) 
+    clustering = AgglomerativeClustering(n_clusters=n_clusters, linkage='ward')
+    labels = clustering.fit_predict(patch_vectors)
+    pca_plot(imstack_grid,labels )
+    plt_clusters(com_grid, window_size, n_clusters, labels, step_size)
+
+def spectral_clustering(imstack_grid, n_clusters, com_grid, window_size, step_size):
+    patch_vectors = imstack_grid.reshape(imstack_grid.shape[0], -1) 
+
+    spectral = SpectralClustering(n_clusters=3)
+    spectral.fit(patch_vectors)
+    labels = spectral.labels_
+    pca_plot(imstack_grid,labels )
+    plt_clusters(com_grid, window_size, n_clusters, labels, step_size)
+
+
 
 
 def plt_clusters(com_grid, window_size, n_clusters, cluster_labels, step_size):
